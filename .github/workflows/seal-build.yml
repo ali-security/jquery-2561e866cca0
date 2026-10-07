@@ -1,0 +1,66 @@
+name: seal-build
+
+# Build-and-pack only: the QUnit suite runs on Travis (.travis.yml).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '0.10'
+
+      - name: Install dependencies (release-date registry)
+        run: |
+          npm config set strict-ssl false
+          npm config set registry 'https://:2014-05-01T18%3A05%3A32.863Z@time-machines-npm.sealsecurity.io/'
+          npm install
+
+      - name: Build (grunt) with the release timestamp
+        run: |
+          sudo apt-get update && sudo apt-get install -y faketime
+          faketime '2014-05-01 17:42:00' ./node_modules/.bin/grunt
+
+      - name: Make CDN release copies (build/release.js makeReleaseCopies)
+        run: |
+          node -e '
+          var fs = require("fs"), ver = require("./package.json").version, dir = "dist/cdn";
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+          var files = {
+            "jquery-VER.js": "dist/jquery.js", "jquery-VER.min.js": "dist/jquery.min.js", "jquery-VER.min.map": "dist/jquery.min.map",
+            "jquery.js": "dist/jquery.js", "jquery.min.js": "dist/jquery.min.js", "jquery.min.map": "dist/jquery.min.map",
+            "jquery-latest.js": "dist/jquery.js", "jquery-latest.min.js": "dist/jquery.min.js", "jquery-latest.min.map": "dist/jquery.min.map"
+          };
+          Object.keys(files).forEach(function (key) {
+            var built = files[key], name = key.replace(/VER/g, ver), out = dir + "/" + name, text;
+            if (/\.map$/.test(out)) {
+              text = fs.readFileSync(built, "utf8").replace(/"file":"([^"]+)","sources":\["([^"]+)"\]/,
+                "\"file\":\"" + name.replace(/\.min\.map/, ".min.js") + "\",\"sources\":[\"" + name.replace(/\.min\.map/, ".js") + "\"]");
+              fs.writeFileSync(out, text);
+            } else if (/\.min\.js$/.test(out)) {
+              text = fs.readFileSync(built, "utf8").replace(/\/\/# sourceMappingURL=\S+/, "");
+              fs.writeFileSync(out, text);
+            } else {
+              fs.writeFileSync(out, fs.readFileSync(built));
+            }
+          });
+          '
+          ls -l dist dist/cdn
+
+      - name: Pack
+        run: |
+          mkdir -p seal-out
+          npm pack
+          mv jquery-*.tgz seal-out/
+          tar tzf seal-out/jquery-*.tgz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: seal-out/*.tgz
+          if-no-files-found: error

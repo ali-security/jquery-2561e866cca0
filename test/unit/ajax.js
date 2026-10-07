@@ -1586,10 +1586,14 @@ module( "ajax", {
 		}
 	});
 
-	testIframeWithCallback( "#14379 - jQuery.ajax() on unload", "ajax/onunload.html", function( status ) {
-		expect( 1 );
-		strictEqual( status, "success", "Request completed" );
-	});
+	// Sealed build: skipped in headless Chrome, which blocks synchronous XHR during page
+	// dismissal (unload) since Chrome 80, so the request always ends in "error" there.
+	if ( !/HeadlessChrome/.test( navigator.userAgent ) ) {
+		testIframeWithCallback( "#14379 - jQuery.ajax() on unload", "ajax/onunload.html", function( status ) {
+			expect( 1 );
+			strictEqual( status, "success", "Request completed" );
+		});
+	}
 
 //----------- jQuery.ajaxPrefilter()
 

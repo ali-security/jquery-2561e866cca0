@@ -1,3 +1,20 @@
 language: node_js
 node_js:
 - '0.10'
+addons:
+  apt:
+    packages:
+    - php-cli
+    - libnss3
+    - libgbm1
+    - libasound2
+    - libatk-bridge2.0-0
+    - libxkbcommon0
+    - libxss1
+    - libgtk-3-0
+script:
+- npm test
+- PHP_CLI_SERVER_WORKERS=8 php -S 127.0.0.1:8000 -t "$TRAVIS_BUILD_DIR" > /tmp/php-server.log 2>&1 &
+- nvm install 18 && nvm use 18
+- mkdir -p /tmp/qunit-runner && (cd /tmp/qunit-runner && npm install --no-save --no-package-lock puppeteer@22.15.0)
+- NODE_PATH=/tmp/qunit-runner/node_modules node .github/scripts/run-qunit.js http://127.0.0.1:8000/test/index.html
